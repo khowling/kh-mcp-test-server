@@ -1,55 +1,54 @@
-# Simple MCP Test Server
+# MCP Test Server
 
-A minimal TypeScript implementation of an MCP (Model-Context-Protocol) server that exposes a simple HTTP listener to the network using the `@modelcontextprotocol/sdk`.
+A minimal TypeScript implementation of a Model-Context-Protocol (MCP) server with HTTP listener using the `@modelcontextprotocol/sdk`.
 
-## Features
+## Project Contents
 
-- Simple HTTP server that listens on all network interfaces
-- MCP server implementation using the official SDK
-- Example echo command implementation
-- Minimal project structure
+- **src/index.ts** - MCP server implementation with HTTP listener
+- **package.json** - Project dependencies and npm scripts
+- **tsconfig.json** - TypeScript configuration
+- **Dockerfile** - Container definition for deployment
+- **deploy-to-azure.sh** - Script to deploy to Azure Container Instances
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js (v14 or higher)
-- npm or yarn
-
-### Installation
+### Local Development
 
 ```bash
 # Install dependencies
 npm install
-```
 
-### Development
-
-```bash
 # Run in development mode
 npm run dev
-```
 
-### Building and Running
-
-```bash
-# Build the project
+# Build and run for production
 npm run build
-
-# Run the built project
 npm run start
 ```
 
-## Usage
+### Deployment to Azure
 
-The server exposes the following endpoints:
+Deploy the MCP server to Azure Container Instances:
+
+```bash
+# Deploy with specified ACR, resource group, and version tag
+./deploy-to-azure.sh <acr-name> <resource-group> <tag>
+
+# Example
+./deploy-to-azure.sh myacr myresourcegroup 1.0.0
+```
+
+The deployment script:
+1. Builds a container image using the ACR build service (if tag doesn't exist)
+2. Creates a resource group if it doesn't exist
+3. Deploys as an Azure Container Instance with a custom DNS name
+
+## API Endpoints
 
 - `GET /health` - Health check endpoint
-- `POST /mcp` - MCP endpoint for command execution
+- `POST /mcp` - MCP command execution endpoint
 
-### Example: Using the Echo Command
-
-Send a POST request to `/mcp` with:
+### Example: Echo Command
 
 ```json
 {
@@ -58,68 +57,6 @@ Send a POST request to `/mcp` with:
     "message": "Hello, MCP!"
   }
 }
-```
-
-Response:
-
-```json
-{
-  "type": "success",
-  "result": {
-    "echoed": "Hello, MCP!",
-    "timestamp": "2025-09-18T12:34:56.789Z"
-  }
-}
-```
-
-### Getting Command Help
-
-Send a request with the `learn` parameter set to `true`:
-
-```json
-{
-  "command": "echo",
-  "learn": true
-}
-```
-
-## Configuration
-
-The server can be configured using environment variables:
-
-- `PORT` - The port to listen on (default: 3000)
-- `HOST` - The host to bind to (default: 0.0.0.0)
-
-## Adding New Commands
-
-To add a new command, create a new handler class that implements the `MCPHandler` interface:
-
-```typescript
-class MyCommandHandler implements MCPHandler {
-  readonly command = 'myCommand';
-  readonly description = 'Description of my command';
-  
-  async handle(context: ICommandContext): Promise<any> {
-    // Implementation
-    return { result: 'some result' };
-  }
-
-  help(): any {
-    // Help information
-    return { ... };
-  }
-}
-```
-
-Then add it to the handlers list when creating the MCP server:
-
-```typescript
-const mcpServer = new MCPServer({
-  handlers: [
-    new EchoCommandHandler(),
-    new MyCommandHandler()
-  ],
-});
 ```
 
 ## License
