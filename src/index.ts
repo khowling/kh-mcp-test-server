@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"
+import { z } from "zod";
 
 
 
@@ -42,11 +43,31 @@ app.post('/mcp', async (req, res) => {
       }
     };
     const server = new McpServer({
-      name: "example-server",
-      version: "1.0.0"
+      name: "weather",
+      version: "1.0.0",
+      capabilities: {
+            resources: {},
+            tools: {},
+        },
     });
-
     // ... set up server resources, tools, and prompts ...
+    server.tool(
+        "get_forecast",
+        "Get weather forecast for a location",
+        {
+            town: z.string().describe("Town or city name"),
+        },
+        async ({ town }) => {
+            return {
+                content: [
+                    {
+                    type: "text",
+                    text: `The weather in ${town} is sunny with a high of 25°C.`,
+                    },
+                ],
+            }
+        }
+    );
 
     // Connect to the MCP server
     await server.connect(transport);

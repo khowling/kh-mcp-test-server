@@ -59,6 +59,32 @@ The deployment script:
 }
 ```
 
-## License
+## Testing
 
-MIT
+Use this for testing `npx @modelcontextprotocol/inspector `
+
+
+## MCP protocol lifecycle
+
+### capability negotiation handshake & tools discovery
+
+the client sends an `initialize` request to establish the connection and negotiate supported features.  The AI application’s MCP client manager establishes connections to configured servers and stores their capabilities for later use.
+
+Now that the connection is established, the client can discover available tools by sending a tools/list request.  The AI application fetches available tools from all connected MCP servers and combines them into a unified tool registry that the language model can access
+
+Server response
+
+```json
+ "capabilities": {
+      "tools": {
+        "listChanged": true
+      },
+      "resources": {}
+    },
+    "serverInfo": {
+      "name": "example-server",
+      "version": "1.0.0"
+    }
+```
+
+The client can now execute a tool using the tools/call method
