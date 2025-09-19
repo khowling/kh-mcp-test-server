@@ -14,7 +14,7 @@ COPY . .
 RUN npm run build
 
 # Expose the MCP server port
-EXPOSE 3000
+#EXPOSE 3000
 
 # Start the application
 CMD ["npm", "run", "start"]

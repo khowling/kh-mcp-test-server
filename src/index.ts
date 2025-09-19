@@ -10,6 +10,24 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Helper function to get headers case-insensitively
+const getHeader = (headers: any, name: string): string | undefined => {
+  // Try exact match first
+  if (headers[name] !== undefined) {
+    return headers[name] as string;
+  }
+  
+  // Try case-insensitive match
+  const lowerName = name.toLowerCase();
+  for (const key in headers) {
+    if (key.toLowerCase() === lowerName) {
+      return headers[key] as string;
+    }
+  }
+  
+  return undefined;
+};
+
 // Enable verbose logging
 const log = (message: string, ...args: any[]) => {
   console.log(`[${new Date().toISOString()}] ${message}`, ...args);
@@ -17,6 +35,44 @@ const log = (message: string, ...args: any[]) => {
 
 // Map to store transports by session ID
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
+
+// Middleware to ensure numeric IDs in requests are converted to strings in responses
+app.use((req, res, next) => {
+  // Save the original res.json method
+  const originalJson = res.json;
+  
+  // Override the json method to convert numeric IDs to strings
+  res.json = function(body) {
+    if (body && typeof body === 'object' && 'jsonrpc' in body) {
+      // If this is a JSON-RPC response
+      if ('id' in body && typeof body.id === 'number') {
+        // Convert numeric ID to string
+        log(`Converting numeric ID ${body.id} to string`);
+        body.id = String(body.id);
+      }
+      
+      // Also check for nested IDs in result
+      if (body.result && typeof body.result === 'object' && 'id' in body.result && typeof body.result.id === 'number') {
+        log(`Converting nested numeric ID ${body.result.id} to string`);
+        body.result.id = String(body.result.id);
+      }
+      
+      // Log the response for debugging
+      log(`Sending JSON-RPC response`, { 
+        status: res.statusCode,
+        id: body.id,
+        hasError: 'error' in body,
+        hasResult: 'result' in body,
+        bodyKeys: Object.keys(body)
+      });
+    }
+    
+    // Call the original method
+    return originalJson.call(this, body);
+  };
+  
+  next();
+});
 
 // Add a simple health check endpoint
 app.get('/health', (req, res) => {
@@ -33,11 +89,15 @@ app.get('/health', (req, res) => {
 app.post('/mcp', async (req, res) => {
   log("Received POST request to /mcp", { 
     headers: req.headers,
-    body: req.body
+    body: req.body,
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    protocol: req.protocol
   });
 
-  // Check for existing session ID
-  const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  // Check for existing session ID - handle case-insensitively
+  const sessionId = getHeader(req.headers, 'mcp-session-id');
   let transport: StreamableHTTPServerTransport;
 
   if (sessionId && transports[sessionId]) {
@@ -70,11 +130,7 @@ app.post('/mcp', async (req, res) => {
     
     const server = new McpServer({
       name: "weather",
-      version: "1.0.0",
-      capabilities: {
-        resources: {},
-        tools: {},
-      },
+      version: "1.0.0"
     });
     
     // Register the weather forecast tool
@@ -104,6 +160,10 @@ app.post('/mcp', async (req, res) => {
       log("Transport connected successfully");
     } catch (error) {
       log("Error connecting transport to server", error);
+      // Get ID safely from any request body type
+      const reqId = req.body && typeof req.body === 'object' && 'id' in req.body ? 
+                    String(req.body.id) : null;
+      
       res.status(500).json({
         jsonrpc: '2.0',
         error: {
@@ -111,7 +171,7 @@ app.post('/mcp', async (req, res) => {
           message: 'Internal server error during connection',
           data: { error: String(error) }
         },
-        id: null,
+        id: reqId,
       });
       return;
     }
@@ -121,13 +181,18 @@ app.post('/mcp', async (req, res) => {
       sessionId,
       isInit: isInitializeRequest(req.body)
     });
+    
+    // Get ID safely from any request body type
+    const reqId = req.body && typeof req.body === 'object' && 'id' in req.body ? 
+                  String(req.body.id) : null;
+    
     res.status(400).json({
       jsonrpc: '2.0',
       error: {
         code: -32000,
         message: 'Bad Request: No valid session ID provided',
       },
-      id: null,
+      id: reqId,
     });
     return;
   }
@@ -139,6 +204,11 @@ app.post('/mcp', async (req, res) => {
     log("Request handled successfully");
   } catch (error) {
     log("Error handling request", error);
+    
+    // Get ID safely from any request body type
+    const reqId = req.body && typeof req.body === 'object' && 'id' in req.body ? 
+                  String(req.body.id) : null;
+    
     res.status(500).json({
       jsonrpc: '2.0',
       error: {
@@ -146,18 +216,30 @@ app.post('/mcp', async (req, res) => {
         message: 'Internal server error while handling request',
         data: { error: String(error) }
       },
-      id: req.body?.id || null,
+      id: reqId,
     });
   }
 });
 
 // Reusable handler for GET and DELETE requests
 const handleSessionRequest = async (req: express.Request, res: express.Response) => {
-  log(`Received ${req.method} request to /mcp`);
+  log(`Received ${req.method} request to /mcp`, {
+    headers: req.headers,
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    protocol: req.protocol,
+    query: req.query
+  });
   
-  const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  const sessionId = getHeader(req.headers, 'mcp-session-id');
   if (!sessionId || !transports[sessionId]) {
-    log("Invalid or missing session ID", { sessionId });
+    log("Invalid or missing session ID", { 
+      sessionId,
+      receivedHeaders: req.headers,
+      availableSessions: Object.keys(transports),
+      hasTransport: sessionId ? !!transports[sessionId] : false
+    });
     res.status(400).json({
       jsonrpc: '2.0',
       error: {

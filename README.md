@@ -88,3 +88,8 @@ Server response
 ```
 
 The client can now execute a tool using the tools/call method
+
+
+#### Setting up for Oauth2
+
+Token / Refresh template url: /v2.0/token
